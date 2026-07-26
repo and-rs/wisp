@@ -24,16 +24,25 @@ pub const Conversation = struct {
         }
         self.messages.deinit(self.allocator);
     }
-    pub fn appendUser(self: *Conversation, message: []const u8) !void {
-        const owned_entry = try self.allocator.dupe(u8, message);
-        errdefer self.allocator.free(owned_entry);
-        try self.messages.append(self.allocator, .{ .user = owned_entry });
-
-        // temporary
+    pub fn printMessages(self: *Conversation) void {
         for (self.messages.items, 0..) |m, i| {
             switch (m) {
                 inline else => |v| std.debug.print("[{d}] = {s}\n", .{ i, v }),
             }
         }
+    }
+    pub fn appendAssistant(self: *Conversation, message: []const u8) !void {
+        const owned_entry = try self.allocator.dupe(u8, message);
+        errdefer self.allocator.free(owned_entry);
+        try self.messages.append(self.allocator, .{ .assistant = owned_entry });
+    }
+    pub fn appendUser(self: *Conversation, message: []const u8) !void {
+        const owned_entry = try self.allocator.dupe(u8, message);
+        errdefer self.allocator.free(owned_entry);
+        try self.messages.append(self.allocator, .{ .user = owned_entry });
+    }
+    pub fn appendUserOwned(self: *Conversation, message: []const u8) !void {
+        errdefer self.allocator.free(message);
+        try self.messages.append(self.allocator, .{ .user = message });
     }
 };

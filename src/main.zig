@@ -11,8 +11,6 @@ pub fn main(init: std.process.Init) !void {
     var convo = conversation.Conversation.init(allocator);
     defer convo.deinit();
 
-    try convo.appendUser("yo biatch");
-
     const Event = union(enum) {
         winsize: vaxis.Winsize,
         key_press: vaxis.Key,
@@ -43,6 +41,13 @@ pub fn main(init: std.process.Init) !void {
             .key_press => |key| {
                 if (key.matches('x', .{ .ctrl = true })) {
                     break;
+                } else if (key.matches(vaxis.Key.enter, .{})) {
+                    const contents = try text_input.toOwnedSlice();
+                    if (contents.len == 0) {
+                        allocator.free(contents);
+                        continue;
+                    }
+                    try convo.appendUserOwned(contents);
                 } else {
                     try text_input.update(.{ .key_press = key });
                 }
@@ -52,6 +57,36 @@ pub fn main(init: std.process.Init) !void {
         window.clear();
 
         const split_layout = layout.Layout.init(window);
+
+        var current_row: u16 = 0;
+
+        for (convo.messages.items) |m| {
+            switch (m) {
+                .user => |v| {
+                    const last_print = split_layout.history.print(&.{
+                        .{ .text = "<User> ", .style = .{ .fg = .{ .index = 2 } } },
+                        .{ .text = v },
+                    }, .{ .row_offset = current_row });
+                    current_row = last_print.row + 1;
+                },
+                .tool => |v| {
+                    const last_print = split_layout.history.print(&.{
+                        .{ .text = "<Tool> ", .style = .{ .fg = .{ .index = 3 } } },
+                        .{ .text = v },
+                    }, .{ .row_offset = current_row });
+                    current_row = last_print.row + 1;
+                },
+                .assistant => |v| {
+                    const last_print = split_layout.history.print(&.{
+                        .{ .text = "<Assistant> ", .style = .{ .fg = .{ .index = 4 } } },
+                        .{ .text = v },
+                    }, .{ .row_offset = current_row });
+                    current_row = last_print.row + 1;
+                },
+            }
+        }
+
+        // before text_input render/draw
         text_input.draw(split_layout.input);
 
         try vx.render(writer);
