@@ -1,10 +1,17 @@
 const std = @import("std");
 const vaxis = @import("vaxis");
+const layout = @import("layout.zig");
+const conversation = @import("conversation.zig");
 
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
     const allocator = init.gpa;
     var buffer: [1024]u8 = undefined;
+
+    var convo = conversation.Conversation.init(allocator);
+    defer convo.deinit();
+
+    try convo.appendUser("yo biatch");
 
     const Event = union(enum) {
         winsize: vaxis.Winsize,
@@ -44,7 +51,9 @@ pub fn main(init: std.process.Init) !void {
         const window = vx.window();
         window.clear();
 
-        text_input.draw(window);
+        const split_layout = layout.Layout.init(window);
+        text_input.draw(split_layout.input);
+
         try vx.render(writer);
     }
 }
