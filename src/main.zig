@@ -1,20 +1,25 @@
 const std = @import("std");
 const vaxis = @import("vaxis");
+const ev = @import("events.zig");
 const layout = @import("layout.zig");
 const conversation = @import("conversation.zig");
+
+const copilot = @import("providers/copilot.zig");
+const hcs = @import("providers/http.zig");
 
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
     const allocator = init.gpa;
     var buffer: [1024]u8 = undefined;
 
+    var request_client = try hcs.DaHttpClient.init(io, allocator);
+    defer request_client.deinit();
+
+    const result = try copilot.DeviceAuthorization.requestDeviceCode(&request_client.http);
+    std.debug.print("{d}", .{result.status});
+
     var convo = conversation.Conversation.init(allocator);
     defer convo.deinit();
-
-    const Event = union(enum) {
-        winsize: vaxis.Winsize,
-        key_press: vaxis.Key,
-    };
 
     var tty = try vaxis.Tty.init(io, &buffer);
     defer tty.deinit();
@@ -23,7 +28,7 @@ pub fn main(init: std.process.Init) !void {
     var vx = try vaxis.init(io, allocator, init.environ_map, .{});
     defer vx.deinit(allocator, writer);
 
-    var loop: vaxis.Loop(Event) = .init(io, &tty, &vx);
+    var loop: vaxis.Loop(ev.Event) = .init(io, &tty, &vx);
     try vx.enterAltScreen(writer);
 
     try loop.start();
