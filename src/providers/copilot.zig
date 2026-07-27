@@ -9,8 +9,12 @@ pub const DeviceAuthorization = struct {
     deadline: std.Io.Clock.Timestamp,
     poll_interval: std.Io.Clock.Duration,
 
-    pub fn requestDeviceCode(client: *std.http.Client) !std.http.Client.FetchResult {
-        return try client.fetch(.{
+    pub fn requestDeviceCode(client: *std.http.Client) ![]u8 {
+        var out: std.Io.Writer.Allocating = .init(client.allocator);
+        errdefer out.deinit();
+
+        _ = try client.fetch(.{
+            .response_writer = &out.writer,
             .method = .POST,
             .headers = .{
                 .content_type = .{ .override = "application/x-www-form-urlencoded" },
@@ -21,6 +25,8 @@ pub const DeviceAuthorization = struct {
             .location = .{ .url = "https://github.com/login/device/code" },
             .payload = "client_id=" ++ client_id ++ "&scope=read%3Auser",
         });
+
+        return out.toOwnedSlice();
     }
 
     pub fn init(io: std.Io, interval: u32, expiry: u32) DeviceAuthorization {

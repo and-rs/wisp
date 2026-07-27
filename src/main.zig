@@ -16,7 +16,8 @@ pub fn main(init: std.process.Init) !void {
     defer request_client.deinit();
 
     const result = try copilot.DeviceAuthorization.requestDeviceCode(&request_client.http);
-    std.debug.print("{d}", .{result.status});
+    defer allocator.free(result);
+    std.debug.print("{s}", .{result});
 
     var convo = conversation.Conversation.init(allocator);
     defer convo.deinit();
@@ -57,6 +58,7 @@ pub fn main(init: std.process.Init) !void {
                     try text_input.update(.{ .key_press = key });
                 }
             },
+            .provider => {},
         }
         const window = vx.window();
         window.clear();
