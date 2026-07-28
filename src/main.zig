@@ -15,10 +15,6 @@ pub fn main(init: std.process.Init) !void {
     var request_client = try hcs.DaHttpClient.init(io, allocator);
     defer request_client.deinit();
 
-    const result = try copilot.DeviceAuthorization.requestDeviceCode(&request_client.http);
-    defer allocator.free(result);
-    std.debug.print("{s}", .{result});
-
     var convo = conversation.Conversation.init(allocator);
     defer convo.deinit();
 
@@ -53,12 +49,19 @@ pub fn main(init: std.process.Init) !void {
                         allocator.free(contents);
                         continue;
                     }
-                    try convo.appendUserOwned(contents);
+                    if (std.mem.eql(u8, contents, "/login")) {
+                        try convo.appendAssistant(contents);
+
+                        // const result = try copilot.DeviceAuthorization.requestDeviceCode(&request_client.http);
+                        // defer allocator.free(result);
+                        // std.debug.print("{s}", .{result});
+                    } else {
+                        try convo.appendUserOwned(contents);
+                    }
                 } else {
                     try text_input.update(.{ .key_press = key });
                 }
             },
-            .provider => {},
         }
         const window = vx.window();
         window.clear();
@@ -95,7 +98,6 @@ pub fn main(init: std.process.Init) !void {
 
         // before text_input render/draw
         text_input.draw(split_layout.input);
-
         try vx.render(writer);
     }
 }
