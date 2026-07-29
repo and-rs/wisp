@@ -1,6 +1,6 @@
-This is my own AI harness with Zig.
+# Wisp
 
-# Wisp is a terminal-native coding-agent harness written in Zig.
+## A terminal-native coding-agent harness written in Zig.
 
 - It owns conversation state, model context, and tool execution. Providers are adapters; Wisp owns the agent loop.
 
