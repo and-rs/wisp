@@ -1,11 +1,19 @@
 const std = @import("std");
 const vaxis = @import("vaxis");
+
 const ev = @import("events.zig");
+const sn = @import("system_notifications.zig");
 const layout = @import("layout.zig");
-const conversation = @import("conversation.zig");
+const cnv = @import("conversation.zig");
 
 const copilot = @import("providers/copilot.zig");
 const hcs = @import("providers/http.zig");
+
+const Command = enum { login, quit };
+const commands = std.StaticStringMap(Command).initComptime(.{
+    .{ "/login", .login },
+    .{ "/quit", .quit },
+});
 
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
@@ -14,9 +22,6 @@ pub fn main(init: std.process.Init) !void {
 
     var request_client = try hcs.DaHttpClient.init(io, allocator);
     defer request_client.deinit();
-
-    var convo = conversation.Conversation.init(allocator);
-    defer convo.deinit();
 
     var tty = try vaxis.Tty.init(io, &buffer);
     defer tty.deinit();
@@ -33,8 +38,17 @@ pub fn main(init: std.process.Init) !void {
 
     try vx.queryTerminal(writer, std.Io.Duration.fromSeconds(1));
 
+    // Initialize main text input
     var text_input = vaxis.widgets.TextInput.init(allocator);
     defer text_input.deinit();
+
+    // Initialize conversation, notifications and copilot POC
+    var conversation = cnv.Conversation.init(allocator);
+    defer conversation.deinit();
+    var system_notifications = sn.SystemNotifications.init(allocator);
+    defer system_notifications.deinit();
+    var copilot_auth = copilot.DeviceAuthorization.init(allocator);
+    defer copilot_auth.deinit();
 
     while (true) {
         const event = try loop.nextEvent();
@@ -43,21 +57,33 @@ pub fn main(init: std.process.Init) !void {
             .key_press => |key| {
                 if (key.matches('x', .{ .ctrl = true })) {
                     break;
-                } else if (key.matches(vaxis.Key.enter, .{})) {
-                    const contents = try text_input.toOwnedSlice();
-                    if (contents.len == 0) {
-                        allocator.free(contents);
+                }
+
+                if (key.matches(vaxis.Key.enter, .{})) {
+                    var contents: ?[]const u8 = try text_input.toOwnedSlice();
+                    defer if (contents) |v| {
+                        allocator.free(v);
+                    };
+                    if (contents == null) {
                         continue;
                     }
-                    if (std.mem.eql(u8, contents, "/login")) {
-                        try convo.appendAssistant(contents);
 
-                        // const result = try copilot.DeviceAuthorization.requestDeviceCode(&request_client.http);
-                        // defer allocator.free(result);
-                        // std.debug.print("{s}", .{result});
-                    } else {
-                        try convo.appendUserOwned(contents);
+                    if (commands.get(contents.?)) |command| {
+                        switch (command) {
+                            .quit => {
+                                break;
+                            },
+                            .login => {
+                                try copilot_auth.initAuthRequest(&request_client.http);
+                                if (copilot_auth.result) |j| {
+                                    try system_notifications.takeSystemMsgOwnership(j.value.verification_uri);
+                                }
+                                contents = null;
+                            },
+                        }
                     }
+
+                    try conversation.takeUserMsgOwnership(contents);
                 } else {
                     try text_input.update(.{ .key_press = key });
                 }
@@ -67,10 +93,21 @@ pub fn main(init: std.process.Init) !void {
         window.clear();
 
         const split_layout = layout.Layout.init(window);
-
         var current_row: u16 = 0;
 
-        for (convo.messages.items) |m| {
+        for (system_notifications.messages.items) |m| {
+            switch (m) {
+                .notice => |v| {
+                    const last_print = split_layout.history.print(&.{
+                        .{ .text = "<System> ", .style = .{ .fg = .{ .index = 1 } } },
+                        .{ .text = v },
+                    }, .{ .row_offset = current_row });
+                    current_row = last_print.row + 1;
+                },
+            }
+        }
+
+        for (conversation.messages.items) |m| {
             switch (m) {
                 .user => |v| {
                     const last_print = split_layout.history.print(&.{

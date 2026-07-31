@@ -1,15 +1,35 @@
 const std = @import("std");
 
 pub const client_id = "Iv23li8yslNT5AaJksdU";
+
+const DeviceCodeResponse = struct {
+    device_code: []const u8,
+    expires_in: i32,
+    interval: i32,
+    user_code: []const u8,
+    verification_uri: []const u8,
+};
+
+pub const LoginDevice = struct {
+    user_code: []const u8,
+    verification_uri: []const u8,
+};
+
 pub const DeviceAuthorization = struct {
-    user_id: ?[]const u8,
-    device_code: ?[]const u8,
-    verification_url: ?[]const u8,
+    allocator: std.mem.Allocator,
+    result: ?std.json.Parsed(DeviceCodeResponse),
 
-    deadline: std.Io.Clock.Timestamp,
-    poll_interval: std.Io.Clock.Duration,
+    pub fn init(a: std.mem.Allocator) DeviceAuthorization {
+        return DeviceAuthorization{ .allocator = a, .result = null };
+    }
 
-    pub fn requestDeviceCode(client: *std.http.Client) ![]u8 {
+    pub fn deinit(self: *DeviceAuthorization) void {
+        if (self.result) |v| {
+            v.deinit();
+        }
+    }
+
+    pub fn initAuthRequest(self: *DeviceAuthorization, client: *std.http.Client) !void {
         var out: std.Io.Writer.Allocating = .init(client.allocator);
         errdefer out.deinit();
 
@@ -26,31 +46,11 @@ pub const DeviceAuthorization = struct {
             .payload = "client_id=" ++ client_id ++ "&scope=read%3Auser",
         });
 
-        return out.toOwnedSlice();
+        self.result = try std.json.parseFromSlice(
+            DeviceCodeResponse,
+            client.allocator,
+            try out.toOwnedSlice(),
+            .{ .allocate = .alloc_always },
+        );
     }
-
-    pub fn init(io: std.Io, interval: u32, expiry: u32) DeviceAuthorization {
-        const clock: std.Io.Clock = .boot;
-        const now = std.Io.Clock.Timestamp.now(io, clock);
-
-        const interval_duration: std.Io.Clock.Duration = .{
-            .raw = std.Io.Duration.fromSeconds(interval),
-            .clock = clock,
-        };
-
-        const expiry_duration: std.Io.Clock.Duration = .{
-            .raw = std.Io.Duration.fromSeconds(expiry),
-            .clock = clock,
-        };
-
-        return DeviceAuthorization{
-            .user_id = null,
-            .device_code = null,
-            .verification_url = null,
-            .poll_interval = interval_duration,
-            .deadline = now.addDuration(expiry_duration),
-        };
-    }
-
-    pub fn deinit() DeviceAuthorization {}
 };

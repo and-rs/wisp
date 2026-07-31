@@ -1,5 +1,10 @@
 # Wisp
 
+## TODO
+
+- [ ] Separate the system messages from the rest of the Conversation struct.
+- [ ] Parse JSON properly in a reusable way.
+
 ## A fast, compact, terminal-native coding harness for thinking through code with you.
 
 - Own your AI agent loop — no opaque agent runtime; conversation, context, providers, tools, and policy remain inspectable.
